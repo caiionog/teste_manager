@@ -7,6 +7,8 @@ class ProductManagementApp:
         self.root = root
         self.current_user = current_user
         self.root.title("Gerenciamento de Estoque")
+        if isinstance(self.root, ThemedTk):
+            self.root.set_theme("black")
         
         # Configurar tamanho e centralizar
         self.root.state('zoomed')  # Maximiza a janela

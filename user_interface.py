@@ -1,6 +1,15 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from database import *
+from ttkthemes import ThemedTk
+
+class LoginWindow:
+    def __init__(self, root, on_login_success):
+        self.root = root
+        self.root.title("Login - Sistema de Gerenciameimport tkinter as tk
+from tkinter import ttk, messagebox
+from database import *
+from ttkthemes import ThemedTk, ThemedToplevel
 
 class LoginWindow:
     def __init__(self, root, on_login_success):
@@ -37,7 +46,7 @@ class LoginWindow:
         self.frame.columnconfigure(1, weight=1)
         
         # Bind Enter key to login
-        self.root.bind('<Return>', lambda event: self.login())
+        self.root.bind("<Return>", lambda event: self.login())
         
     def login(self):
         username = self.username_entry.get()
@@ -65,7 +74,7 @@ class UserManagementApp:
         self.root.title("Gerenciamento de Usuários")
         
         # Configurar tamanho e centralizar
-        self.root.state('zoomed')  # Maximiza a janela
+        self.root.state("zoomed")  # Maximiza a janela
         
         # Verificar se o usuário atual é admin
         self.is_admin = bool(current_user[5])  # is_admin está na posição 5
@@ -126,7 +135,7 @@ class UserManagementApp:
         self.status_frame = ttk.Frame(self.main_frame)
         self.status_frame.pack(fill=tk.X, pady=(10, 0))
         
-        self.status_label = ttk.Label(self.status_frame, text=f"Logado como: {self.current_user[3]} ({'Admin' if self.is_admin else 'Usuário'})")
+        self.status_label = ttk.Label(self.status_frame, text=f"Logado como: {self.current_user[3]} ({\'Admin\' if self.is_admin else \'Usuário\'}) ")
         self.status_label.pack(side=tk.LEFT)
         
         # Desabilitar botões se não for admin
@@ -156,7 +165,8 @@ class UserManagementApp:
                 ))
     
     def show_add_user_dialog(self):
-        dialog = tk.Toplevel(self.root)
+        dialog = ThemedToplevel(self.root) # Use ThemedToplevel para a janela de diálogo
+        dialog.set_theme("black") # Define o tema escuro para a janela de diálogo
         dialog.title("Adicionar Novo Usuário")
         
         # Centralizar a janela
@@ -241,7 +251,8 @@ class UserManagementApp:
             conn.close()
             
             if user:
-                dialog = tk.Toplevel(self.root)
+                dialog = ThemedToplevel(self.root) # Use ThemedToplevel para a janela de diálogo
+                dialog.set_theme("black") # Define o tema escuro para a janela de diálogo
                 dialog.title("Editar Usuário")
                 
                 # Centralizar a janela
@@ -325,7 +336,7 @@ class UserManagementApp:
         user_id = self.tree.item(selected_item[0], "values")[0]
         username = self.tree.item(selected_item[0], "values")[1]
         
-        if messagebox.askyesno("Confirmar", f"Tem certeza que deseja excluir o usuário '{username}'?"):
+        if messagebox.askyesno("Confirmar", f"Tem certeza que deseja excluir o usuário \'{username}\'?"):
             conn = create_connection()
             if conn is not None:
                 success = delete_user(conn, user_id)
@@ -335,4 +346,4 @@ class UserManagementApp:
                     messagebox.showinfo("Sucesso", "Usuário excluído com sucesso!")
                     self.load_users()
                 else:
-                    messagebox.showerror("Erro", "Não foi possível excluir o usuário")
+                    messagebox.showerror("Erro", "Não foi possível excluir o usuário"))

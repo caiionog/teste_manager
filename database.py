@@ -87,6 +87,23 @@ def create_sales_tables(conn):
     except Error as e:
         print(e)
 
+def create_client_table(conn):
+    """Cria a tabela de clientes se não existir"""
+    try:
+        sql = '''CREATE TABLE IF NOT EXISTS clients (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    doc TEXT UNIQUE,
+                    phone TEXT,
+                    email TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );'''
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        conn.commit()
+    except Error as e:
+        print(e)
+
 def initialize_database():
     """Inicializa o banco de dados e cria tabelas necessárias"""
     conn = create_connection()
@@ -94,6 +111,7 @@ def initialize_database():
         create_table(conn)          # Tabela de usuários
         create_product_table(conn)  # Tabela de produtos
         create_sales_tables(conn)   # Tabelas de vendas
+        create_client_table(conn)   # Tabela de clientes
         
         # Verifica se existe algum admin
         cursor = conn.cursor()
@@ -304,11 +322,26 @@ def get_all_sales(conn):
             FROM sales s
             JOIN users u ON s.user_id = u.id
             ORDER BY s.sale_date DESC
-        """)
+        """
+        )
         return cursor.fetchall()
     except Error as e:
         print(e)
         return []
+
+def delete_sale(conn, sale_id):
+    """Remove uma venda e seus itens do banco de dados"""
+    try:
+        cursor = conn.cursor()
+        conn.execute("BEGIN TRANSACTION")
+        cursor.execute("DELETE FROM sale_items WHERE sale_id=?", (sale_id,))
+        cursor.execute("DELETE FROM sales WHERE id=?", (sale_id,))
+        conn.commit()
+        return True
+    except Error as e:
+        conn.rollback()
+        print(e)
+        return False
 
 def update_product_quantity(conn, product_id, quantity_sold):
     """Atualiza a quantidade em estoque de um produto"""
@@ -320,3 +353,42 @@ def update_product_quantity(conn, product_id, quantity_sold):
     except Error as e:
         print(e)
         return False
+
+def add_client(conn, name, doc, phone, email):
+    """Adiciona um novo cliente ao banco de dados"""
+    try:
+        sql = '''INSERT INTO clients(name, doc, phone, email)
+                 VALUES(?,?,?,?)'''
+        cursor = conn.cursor()
+        cursor.execute(sql, (name, doc, phone, email))
+        conn.commit()
+        return cursor.lastrowid
+    except Error as e:
+        print(e)
+        return None
+
+def get_all_clients(conn):
+    """Retorna todos os clientes do banco de dados"""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM clients")
+        return cursor.fetchall()
+    except Error as e:
+        print(e)
+        return []
+
+def get_sales_by_user(conn):
+    """Obtém o total de vendas e o número de vendas por usuário"""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT user_id, SUM(total), COUNT(id)
+            FROM sales
+            GROUP BY user_id
+        """
+        )
+        return cursor.fetchall()
+    except Error as e:
+        print(e)
+        return []
+

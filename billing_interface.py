@@ -5,12 +5,15 @@ from database import *
 from datetime import datetime
 import os
 from fpdf import FPDF
+from ttkthemes import ThemedTk
 
 class BillingSystem:
     def __init__(self, root, current_user):
         self.root = root
         self.current_user = current_user
         self.root.title("Sistema de Cobrança")
+        if isinstance(self.root, ThemedTk):
+            self.root.set_theme("black")
         
         # Variáveis da venda
         self.cart = []
@@ -19,7 +22,7 @@ class BillingSystem:
         self.payment_method = "Dinheiro"
         
         # Configurar tamanho e centralizar
-        self.root.state('zoomed')  # Maximiza a janela
+        self.root.state("zoomed")  # Maximiza a janela
         
         # Criar widgets
         self.create_widgets()
@@ -108,16 +111,14 @@ class BillingSystem:
         self.doc_entry = ttk.Entry(bottom_frame, width=20)
         self.doc_entry.grid(row=0, column=3, sticky=tk.W, padx=5)
         
-        # Forma de pagamento
         ttk.Label(bottom_frame, text="Pagamento:").grid(row=1, column=0, sticky=tk.W)
         self.payment_var = tk.StringVar(value="Dinheiro")
         payment_options = ["Dinheiro", "Cartão Débito", "Cartão Crédito", "PIX", "Transferência"]
         self.payment_combobox = ttk.Combobox(bottom_frame, textvariable=self.payment_var, values=payment_options, width=15)
         self.payment_combobox.grid(row=1, column=1, sticky=tk.W, padx=5)
         
-        # Totais
         ttk.Label(bottom_frame, text="Subtotal:").grid(row=2, column=0, sticky=tk.W)
-        self.subtotal_label = ttk.Label(bottom_frame, text="R$ 0.00", font=('Helvetica', 10, 'bold'))
+        self.subtotal_label = ttk.Label(bottom_frame, text="R$ 0.00", font=("Helvetica", 10, "bold"))
         self.subtotal_label.grid(row=2, column=1, sticky=tk.W, padx=5)
         
         ttk.Label(bottom_frame, text="Desconto:").grid(row=2, column=2, sticky=tk.W)
@@ -126,14 +127,13 @@ class BillingSystem:
         self.discount_entry.grid(row=2, column=3, sticky=tk.W, padx=5)
         
         ttk.Label(bottom_frame, text="Total:").grid(row=3, column=0, sticky=tk.W)
-        self.total_label = ttk.Label(bottom_frame, text="R$ 0.00", font=('Helvetica', 12, 'bold'))
+        self.total_label = ttk.Label(bottom_frame, text="R$ 0.00", font=("Helvetica", 12, "bold"))
         self.total_label.grid(row=3, column=1, sticky=tk.W, padx=5)
         
-        # Botões de ação
         action_frame = ttk.Frame(bottom_frame)
         action_frame.grid(row=4, column=0, columnspan=4, pady=10)
         
-        self.finalize_button = ttk.Button(action_frame, text="Finalizar Venda", command=self.finalize_sale, style='Accent.TButton')
+        self.finalize_button = ttk.Button(action_frame, text="Finalizar Venda", command=self.finalize_sale, style="Accent.TButton")
         self.finalize_button.pack(side=tk.LEFT, padx=5)
         
         self.print_button = ttk.Button(action_frame, text="Imprimir Nota", command=self.print_receipt)
@@ -142,14 +142,11 @@ class BillingSystem:
         self.pdf_button = ttk.Button(action_frame, text="Salvar como PDF", command=self.save_as_pdf)
         self.pdf_button.pack(side=tk.LEFT, padx=5)
         
-        # Configurar estilo
         style = ttk.Style()
-        style.configure('Accent.TButton', font=('Helvetica', 10, 'bold'), foreground='green')
+        style.configure("Accent.TButton", font=("Helvetica", 10, "bold"), foreground="green")
         
-        # Bind events
-        self.discount_entry.bind('<KeyRelease>', self.update_totals)
+        self.discount_entry.bind("<KeyRelease>", self.update_totals)
         
-        # Barra de status
         self.status_frame = ttk.Frame(self.root)
         self.status_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -160,11 +157,9 @@ class BillingSystem:
         self.status_label.pack(side=tk.LEFT, padx=10)
     
     def load_products(self):
-        # Limpar treeview
         for item in self.products_tree.get_children():
             self.products_tree.delete(item)
         
-        # Carregar produtos do banco de dados
         conn = create_connection()
         if conn is not None:
             products = get_all_products(conn)
@@ -190,12 +185,10 @@ class BillingSystem:
         price = float(self.products_tree.item(selected_item[0], "values")[2])
         stock = int(self.products_tree.item(selected_item[0], "values")[3])
         
-        # Pedir quantidade
-        quantity = simpledialog.askinteger("Quantidade", f"Quantidade de '{product_name}':", minvalue=1, maxvalue=stock)
+        quantity = simpledialog.askinteger("Quantidade", f"Quantidade de \'{product_name}\'", minvalue=1, maxvalue=stock)
         if quantity is None or quantity <= 0:
             return
         
-        # Verificar se o produto já está no carrinho
         for item in self.cart:
             if item["id"] == product_id:
                 item["quantity"] += quantity
@@ -204,7 +197,6 @@ class BillingSystem:
                 self.update_totals()
                 return
         
-        # Adicionar novo item ao carrinho
         self.cart.append({
             "id": product_id,
             "name": product_name,
@@ -224,7 +216,6 @@ class BillingSystem:
         
         product_id = self.cart_tree.item(selected_item[0], "values")[0]
         
-        # Remover item do carrinho
         self.cart = [item for item in self.cart if item["id"] != product_id]
         
         self.update_cart_display()
@@ -240,21 +231,18 @@ class BillingSystem:
             self.update_totals()
     
     def update_cart_display(self):
-        # Limpar treeview
         for item in self.cart_tree.get_children():
             self.cart_tree.delete(item)
         
-        # Adicionar itens do carrinho
         for item in self.cart:
             self.cart_tree.insert("", tk.END, values=(
                 item["id"],
                 item["name"],
                 item["quantity"],
-                f"{item['price']:.2f}",
-                f"{item['total']:.2f}"
+                f"{item["price"]:.2f}",
+                f"{item["total"]:.2f}"
             ))
         
-        # Atualizar status
         self.status_label.config(text=f"Atendente: {self.current_user[3]} | Carrinho: {len(self.cart)} itens")
     
     def update_totals(self, event=None):
@@ -267,7 +255,7 @@ class BillingSystem:
             self.discount_entry.delete(0, tk.END)
             self.discount_entry.insert(0, "0.00")
         
-        total = max(0, subtotal - discount)  # Garante que o total não seja negativo
+        total = max(0, subtotal - discount)
         
         self.subtotal_label.config(text=f"R$ {subtotal:.2f}")
         self.total_label.config(text=f"R$ {total:.2f}")
@@ -277,12 +265,10 @@ class BillingSystem:
             messagebox.showwarning("Aviso", "O carrinho está vazio")
             return
         
-        # Obter informações do cliente
         self.customer_name = self.customer_entry.get().strip()
         self.customer_doc = self.doc_entry.get().strip()
         self.payment_method = self.payment_var.get()
         
-        # Calcular totais
         subtotal = sum(item["total"] for item in self.cart)
         try:
             discount = float(self.discount_entry.get())
@@ -290,18 +276,14 @@ class BillingSystem:
             discount = 0.0
         total = max(0, subtotal - discount)
         
-        # Confirmar venda
         if not messagebox.askyesno("Confirmar Venda", f"Total da venda: R$ {total:.2f}\n\nConfirmar venda?"):
             return
         
-        # Registrar venda no banco de dados
         conn = create_connection()
         if conn is not None:
             try:
-                # Iniciar transação
                 conn.execute("BEGIN TRANSACTION")
                 
-                # Adicionar venda
                 sale_id = add_sale(
                     conn,
                     self.customer_name if self.customer_name else "Consumidor Final",
@@ -310,11 +292,10 @@ class BillingSystem:
                     discount,
                     total,
                     self.payment_method,
-                    self.current_user[0]  # user_id
+                    self.current_user[0]
                 )
                 
                 if sale_id:
-                    # Adicionar itens da venda e atualizar estoque
                     for item in self.cart:
                         add_sale_item(
                             conn,
@@ -325,15 +306,12 @@ class BillingSystem:
                             item["total"]
                         )
                         
-                        # Atualizar estoque
                         update_product_quantity(conn, item["id"], item["quantity"])
                     
-                    # Commit da transação
                     conn.commit()
                     
                     messagebox.showinfo("Sucesso", f"Venda finalizada com sucesso!\nNúmero da nota: {sale_id}")
                     
-                    # Limpar carrinho e campos
                     self.cart = []
                     self.customer_entry.delete(0, tk.END)
                     self.doc_entry.delete(0, tk.END)
@@ -341,10 +319,10 @@ class BillingSystem:
                     self.discount_entry.insert(0, "0.00")
                     self.update_cart_display()
                     self.update_totals()
-                    self.load_products()  # Atualizar estoque
+                    self.load_products()
                     
-                    # Gerar nota fiscal
                     self.generate_receipt(sale_id)
+                    self.save_as_pdf(sale_id)
                 else:
                     conn.rollback()
                     messagebox.showerror("Erro", "Não foi possível registrar a venda")
@@ -357,7 +335,6 @@ class BillingSystem:
                 conn.close()
     
     def generate_receipt(self, sale_id):
-        """Gera os dados da nota fiscal"""
         conn = create_connection()
         if conn is not None:
             sale, items = get_sale_by_id(conn, sale_id)
@@ -374,81 +351,100 @@ class BillingSystem:
                     "total": sale[6],
                     "payment_method": sale[7],
                     "cashier": self.current_user[3],
+                    "seller_id": sale[8],
                     "items": []
                 }
                 
                 for item in items:
                     receipt_data["items"].append({
-                        "name": item[6],  # product name
+                        "name": item[6],
                         "quantity": item[3],
                         "unit_price": item[4],
                         "total_price": item[5]
                     })
                 
                 return receipt_data
-        return None
-    
+            else:
+                messagebox.showerror("Erro", "Não foi possível gerar a nota fiscal. Dados da venda não encontrados.")
+                return None
+
+    def create_pdf(self, receipt_data):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 16)
+        
+        pdf.cell(0, 10, "NOTA FISCAL", 0, 1, "C")
+        pdf.ln(10)
+        
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 10, f"Número da Venda: {receipt_data["sale_id"]}", 0, 1)
+        pdf.cell(0, 10, f"Data: {receipt_data["date"]}", 0, 1)
+        pdf.cell(0, 10, f"Cliente: {receipt_data["customer_name"]}", 0, 1)
+        pdf.cell(0, 10, f"CPF/CNPJ: {receipt_data["customer_doc"]}", 0, 1)
+        pdf.cell(0, 10, f"Atendente: {receipt_data["cashier"]} (ID: {receipt_data["seller_id"]})")
+        pdf.ln(10)
+        
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, "ITENS DA VENDA", 0, 1, "C")
+        pdf.ln(5)
+        
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(80, 10, "Produto", 1, 0, "C")
+        pdf.cell(30, 10, "Qtd", 1, 0, "C")
+        pdf.cell(40, 10, "Preço Unit.", 1, 0, "C")
+        pdf.cell(40, 10, "Total", 1, 1, "C")
+        
+        pdf.set_font("Arial", "", 10)
+        for item in receipt_data["items"]:
+            pdf.cell(80, 10, item["name"], 1, 0)
+            pdf.cell(30, 10, str(item["quantity"]), 1, 0, "C")
+            pdf.cell(40, 10, f"R$ {item["unit_price"]:.2f}", 1, 0, "R")
+            pdf.cell(40, 10, f"R$ {item["total_price"]:.2f}", 1, 1, "R")
+            
+        pdf.ln(10)
+        
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 10, f"Subtotal: R$ {receipt_data["subtotal"]:.2f}", 0, 1, "R")
+        pdf.cell(0, 10, f"Desconto: R$ {receipt_data["discount"]:.2f}", 0, 1, "R")
+        pdf.cell(0, 10, f"Total: R$ {receipt_data["total"]:.2f}", 0, 1, "R")
+        pdf.cell(0, 10, f"Forma de Pagamento: {receipt_data["payment_method"]}", 0, 1, "R")
+        
+        return pdf
+
+    def save_as_pdf(self, sale_id):
+        receipt_data = self.generate_receipt(sale_id)
+        if receipt_data:
+            pdf = self.create_pdf(receipt_data)
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                initialfile=f"NotaFiscal_{receipt_data["sale_id"]}.pdf"
+            )
+            if file_path:
+                try:
+                    pdf.output(file_path)
+                    messagebox.showinfo("Sucesso", f"Nota fiscal salva em: {file_path}")
+                except Exception as e:
+                    messagebox.showerror("Erro", f"Erro ao salvar PDF: {e}")
+        else:
+            messagebox.showerror("Erro", "Não foi possível gerar os dados da nota fiscal para salvar como PDF.")
+
     def print_receipt(self):
-        """Imprime a nota fiscal"""
-        if not self.cart:
-            messagebox.showwarning("Aviso", "Não há itens no carrinho para gerar nota")
-            return
-        
-        # Para impressão real, você precisaria de uma impressora configurada
-        # Aqui vamos apenas mostrar uma prévia
-        receipt_data = {
-            "sale_id": "PRÉVIA",
-            "date": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-            "customer_name": self.customer_entry.get() or "Consumidor Final",
-            "customer_doc": self.doc_entry.get() or "",
-            "subtotal": sum(item["total"] for item in self.cart),
-            "discount": float(self.discount_entry.get()),
-            "total": float(self.total_label.cget("text").replace("R$ ", "")),
-            "payment_method": self.payment_var.get(),
-            "cashier": self.current_user[3],
-            "items": self.cart
-        }
-        
-        self.show_receipt_preview(receipt_data)
-    
-    def save_as_pdf(self):
-        """Salva a nota fiscal como PDF"""
-        if not self.cart:
-            messagebox.showwarning("Aviso", "Não há itens no carrinho para gerar nota")
-            return
-        
-        # Gerar dados da nota
-        receipt_data = {
-            "sale_id": "PRÉVIA",
-            "date": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-            "customer_name": self.customer_entry.get() or "Consumidor Final",
-            "customer_doc": self.doc_entry.get() or "",
-            "subtotal": sum(item["total"] for item in self.cart),
-            "discount": float(self.discount_entry.get()),
-            "total": float(self.total_label.cget("text").replace("R$ ", "")),
-            "payment_method": self.payment_var.get(),
-            "cashier": self.current_user[3],
-            "items": self.cart
-        }
-        
-        # Pedir local para salvar
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".pdf",
-            filetypes=[("PDF Files", "*.pdf")],
-            title="Salvar Nota Fiscal como PDF",
-            initialfile=f"NotaFiscal_{receipt_data['sale_id']}.pdf"
-        )
-        
-        if file_path:
-            self.create_pdf(receipt_data, file_path)
-            messagebox.showinfo("Sucesso", f"Nota fiscal salva como:\n{file_path}")
-    
-    def show_receipt_preview(self, receipt_data):
-        """Mostra uma prévia da nota fiscal"""
-        preview_window = tk.Toplevel(self.root)
-        preview_window.title(f"Prévia da Nota Fiscal - Nº {receipt_data['sale_id']}")
-        
-        # Frame principal
+        messagebox.showinfo("Funcionalidade em Desenvolvimento", "A funcionalidade de impressão direta está em desenvolvimento.")
+        # Implementação futura para impressão direta
+        # try:
+        #     # Simula a impressão
+        #     messagebox.showinfo("Impressão", "Imprimindo nota fiscal...")
+        #     # Aqui você integraria com a API da impressora ou comando do sistema operacional
+        # except Exception as e:
+        #     messagebox.showerror("Erro de Impressão", f"Não foi possível imprimir a nota fiscal: {e}")
+
+mpressora ou comando do sistema operacional
+        # except Exception as e:
+        #     messagebox.showerror("Erro de Impressão", f"Não foi possível imprimir a nota fiscal: {e}")
+
+imprimir a nota fiscal: {e}")
+
         frame = ttk.Frame(preview_window, padding="10")
         frame.pack(fill=tk.BOTH, expand=True)
         
@@ -570,7 +566,7 @@ class BillingSystem:
         # Pagamento e atendente
         pdf.set_font("Arial", size=12)
         pdf.cell(0, 10, f"Forma de Pagamento: {receipt_data['payment_method']}", 0, 1)
-        pdf.cell(0, 10, f"Atendente: {receipt_data['cashier']}", 0, 1)
+        pdf.cell(0, 10, f"Atendente: {receipt_data["cashier"]} (ID: {receipt_data["seller_id"]})")
         
         # Rodapé
         pdf.set_y(-15)
@@ -590,6 +586,14 @@ class BillingSystem:
         self.create_pdf(receipt_data, temp_path)
         
         try:
+            # Simulação de verificação de impressora
+            # Em um ambiente real, você usaria bibliotecas específicas para interagir com impressoras
+            printer_available = True  # Simula que uma impressora está disponível
+
+            if not printer_available:
+                messagebox.showerror("Erro de Impressão", "Nenhuma impressora encontrada ou configurada.")
+                return
+
             # Abrir o PDF com o visualizador padrão (que pode ter opção de impressão)
             os.startfile(temp_path, 'print')
             messagebox.showinfo("Impressão", "Nota fiscal enviada para impressão")
