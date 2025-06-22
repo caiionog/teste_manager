@@ -1,15 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from database import create_connection, get_sales_by_user, get_all_products, get_user_by_id
-from ttkthemes import ThemedTk
 
 class ReportsManagementApp:
     def __init__(self, root, current_user):
         self.root = root
         self.current_user = current_user
         self.root.title("Relatórios de Vendas")
-        if isinstance(self.root, ThemedTk):
-            self.root.set_theme("black")
         self.root.state("zoomed")
 
         if not bool(self.current_user[5]):  # is_admin

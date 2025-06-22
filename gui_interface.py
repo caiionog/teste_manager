@@ -1,15 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
-from ttkthemes import ThemedTk
 
 class TesteManagerApp:
     def __init__(self, master):
         self.master = master
         master.title("Teste Manager")
         master.geometry("500x400")
-        
-        # Configurar tema escuro
-        master.set_theme("black")  # Exemplo de tema escuro
 
         self.create_widgets()
 
@@ -39,6 +35,6 @@ class TesteManagerApp:
         messagebox.showinfo("Faturamento", "Funcionalidade de faturamento em construção.")
 
 if __name__ == "__main__":
-    root = ThemedTk()
+    root = tk.Tk()
     app = TesteManagerApp(root)
     root.mainloop()

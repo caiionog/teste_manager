@@ -1,15 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from database import *
-from ttkthemes import ThemedTk
-
-class LoginWindow:
-    def __init__(self, root, on_login_success):
-        self.root = root
-        self.root.title("Login - Sistema de Gerenciameimport tkinter as tk
-from tkinter import ttk, messagebox
-from database import *
-from ttkthemes import ThemedTk, ThemedToplevel
 
 class LoginWindow:
     def __init__(self, root, on_login_success):
@@ -135,7 +126,7 @@ class UserManagementApp:
         self.status_frame = ttk.Frame(self.main_frame)
         self.status_frame.pack(fill=tk.X, pady=(10, 0))
         
-        self.status_label = ttk.Label(self.status_frame, text=f"Logado como: {self.current_user[3]} ({\'Admin\' if self.is_admin else \'Usuário\'}) ")
+        self.status_label = ttk.Label(self.status_frame, text=f"Logado como: {self.current_user[3]} ({'Admin' if self.is_admin else 'Usuário'}) ")
         self.status_label.pack(side=tk.LEFT)
         
         # Desabilitar botões se não for admin
@@ -165,8 +156,7 @@ class UserManagementApp:
                 ))
     
     def show_add_user_dialog(self):
-        dialog = ThemedToplevel(self.root) # Use ThemedToplevel para a janela de diálogo
-        dialog.set_theme("black") # Define o tema escuro para a janela de diálogo
+        dialog = tk.Toplevel(self.root)
         dialog.title("Adicionar Novo Usuário")
         
         # Centralizar a janela
@@ -251,8 +241,7 @@ class UserManagementApp:
             conn.close()
             
             if user:
-                dialog = ThemedToplevel(self.root) # Use ThemedToplevel para a janela de diálogo
-                dialog.set_theme("black") # Define o tema escuro para a janela de diálogo
+                dialog = tk.Toplevel(self.root)
                 dialog.title("Editar Usuário")
                 
                 # Centralizar a janela
@@ -346,4 +335,5 @@ class UserManagementApp:
                     messagebox.showinfo("Sucesso", "Usuário excluído com sucesso!")
                     self.load_users()
                 else:
-                    messagebox.showerror("Erro", "Não foi possível excluir o usuário"))
+                    messagebox.showerror("Erro", "Não foi possível excluir o usuário")
+

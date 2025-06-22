@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from database import create_connection, add_client, get_all_clients
-from ttkthemes import ThemedTk
+from database import *
 
 class ClientManagementApp:
     def __init__(self, root, current_user):

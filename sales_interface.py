@@ -7,8 +7,6 @@ class SalesManagementApp:
         self.root = root
         self.current_user = current_user
         self.root.title("Gerenciamento de Notas")
-        if isinstance(self.root, ThemedTk):
-            self.root.set_theme("black")
         self.root.state("zoomed")
 
         self.create_widgets()
