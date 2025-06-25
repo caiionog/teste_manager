@@ -4,6 +4,8 @@ from tkinter import filedialog
 from database import *
 from datetime import datetime
 import os
+import subprocess
+import platform
 from fpdf import FPDF
 
 class BillingSystem:
@@ -127,17 +129,34 @@ class BillingSystem:
         self.total_label = ttk.Label(bottom_frame, text="R$ 0.00", font=("Helvetica", 12, "bold"))
         self.total_label.grid(row=3, column=1, sticky=tk.W, padx=5)
         
+        # Frame de ações - NOVA ORGANIZAÇÃO
         action_frame = ttk.Frame(bottom_frame)
         action_frame.grid(row=4, column=0, columnspan=4, pady=10)
         
-        self.finalize_button = ttk.Button(action_frame, text="Finalizar Venda", command=self.finalize_sale)
-        self.finalize_button.pack(side=tk.LEFT, padx=5)
+        # Botões de preview e impressão (ANTES da finalização)
+        preview_frame = ttk.LabelFrame(action_frame, text="Preview da Nota Fiscal", padding="5")
+        preview_frame.pack(side=tk.LEFT, padx=5)
         
-        self.print_button = ttk.Button(action_frame, text="Imprimir Nota", command=self.print_receipt)
-        self.print_button.pack(side=tk.LEFT, padx=5)
+        self.preview_button = ttk.Button(preview_frame, text="📄 Visualizar Nota", command=self.preview_receipt)
+        self.preview_button.pack(pady=2)
         
-        self.pdf_button = ttk.Button(action_frame, text="Salvar como PDF", command=self.save_as_pdf)
-        self.pdf_button.pack(side=tk.LEFT, padx=5)
+        self.print_preview_button = ttk.Button(preview_frame, text="🖨️ Imprimir Preview", command=self.print_preview)
+        self.print_preview_button.pack(pady=2)
+        
+        self.save_preview_button = ttk.Button(preview_frame, text="💾 Salvar PDF Preview", command=self.save_preview_pdf)
+        self.save_preview_button.pack(pady=2)
+        
+        # Separador visual
+        separator = ttk.Separator(action_frame, orient='vertical')
+        separator.pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        
+        # Botão de finalização
+        finalize_frame = ttk.LabelFrame(action_frame, text="Finalizar Venda", padding="5")
+        finalize_frame.pack(side=tk.LEFT, padx=5)
+        
+        self.finalize_button = ttk.Button(finalize_frame, text="✅ Finalizar Venda", command=self.finalize_sale, 
+                                        style='Accent.TButton')
+        self.finalize_button.pack(pady=10)
         
         self.discount_entry.bind("<KeyRelease>", self.update_totals)
         
@@ -254,6 +273,316 @@ class BillingSystem:
         self.subtotal_label.config(text=f"R$ {subtotal:.2f}")
         self.total_label.config(text=f"R$ {total:.2f}")
     
+    def get_current_receipt_data(self):
+        """Gera dados da nota fiscal com base no carrinho atual (antes da finalização)"""
+        if not self.cart:
+            return None
+        
+        customer_name = self.customer_entry.get().strip() or "Consumidor Final"
+        customer_doc = self.doc_entry.get().strip() or "Não informado"
+        payment_method = self.payment_var.get()
+        
+        subtotal = sum(item["total"] for item in self.cart)
+        try:
+            discount = float(self.discount_entry.get())
+        except ValueError:
+            discount = 0.0
+        total = max(0, subtotal - discount)
+        
+        receipt_data = {
+            "sale_id": "PREVIEW",
+            "date": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            "customer_name": customer_name,
+            "customer_doc": customer_doc,
+            "subtotal": subtotal,
+            "discount": discount,
+            "total": total,
+            "payment_method": payment_method,
+            "cashier": self.current_user[3],
+            "seller_id": self.current_user[0],
+            "items": []
+        }
+        
+        for item in self.cart:
+            receipt_data["items"].append({
+                "name": item["name"],
+                "quantity": item["quantity"],
+                "unit_price": item["price"],
+                "total_price": item["total"]
+            })
+        
+        return receipt_data
+    
+    def preview_receipt(self):
+        """Mostra preview da nota fiscal em uma janela"""
+        receipt_data = self.get_current_receipt_data()
+        if not receipt_data:
+            messagebox.showwarning("Aviso", "O carrinho está vazio")
+            return
+        
+        # Criar janela de preview
+        preview_window = tk.Toplevel(self.root)
+        preview_window.title("Preview da Nota Fiscal")
+        preview_window.geometry("600x700")
+        preview_window.resizable(True, True)
+        
+        # Frame principal com scrollbar
+        main_frame = ttk.Frame(preview_window)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Canvas e scrollbar para rolagem
+        canvas = tk.Canvas(main_frame, bg="white")
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Conteúdo da nota fiscal
+        self.create_receipt_content(scrollable_frame, receipt_data)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Botões na parte inferior
+        button_frame = ttk.Frame(preview_window)
+        button_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Button(button_frame, text="🖨️ Imprimir", command=lambda: self.print_receipt_data(receipt_data)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="💾 Salvar PDF", command=lambda: self.save_receipt_pdf(receipt_data)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="❌ Fechar", command=preview_window.destroy).pack(side=tk.RIGHT, padx=5)
+    
+    def create_receipt_content(self, parent, receipt_data):
+        """Cria o conteúdo visual da nota fiscal no padrão convencional"""
+        # Cabeçalho da empresa
+        company_frame = ttk.Frame(parent, relief="solid", borderwidth=1)
+        company_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(company_frame, text="SISTEMA DE GERENCIAMENTO", font=("Arial", 16, "bold")).pack(pady=5)
+        ttk.Label(company_frame, text="CNPJ: 00.000.000/0001-00", font=("Arial", 10)).pack()
+        ttk.Label(company_frame, text="Endereço: Rua Exemplo, 123 - Centro - Cidade/UF", font=("Arial", 10)).pack()
+        ttk.Label(company_frame, text="Telefone: (11) 1234-5678", font=("Arial", 10)).pack(pady=(0, 5))
+        
+        # Título da nota
+        title_frame = ttk.Frame(parent)
+        title_frame.pack(fill=tk.X, pady=10)
+        ttk.Label(title_frame, text="NOTA FISCAL DE VENDA", font=("Arial", 14, "bold")).pack()
+        
+        # Informações da venda
+        info_frame = ttk.Frame(parent, relief="solid", borderwidth=1)
+        info_frame.pack(fill=tk.X, pady=5)
+        
+        info_left = ttk.Frame(info_frame)
+        info_left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        info_right = ttk.Frame(info_frame)
+        info_right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Lado esquerdo
+        ttk.Label(info_left, text=f"Número: {receipt_data['sale_id']}", font=("Arial", 10, "bold")).pack(anchor="w")
+        ttk.Label(info_left, text=f"Data/Hora: {receipt_data['date']}", font=("Arial", 10)).pack(anchor="w")
+        ttk.Label(info_left, text=f"Cliente: {receipt_data['customer_name']}", font=("Arial", 10)).pack(anchor="w")
+        ttk.Label(info_left, text=f"CPF/CNPJ: {receipt_data['customer_doc']}", font=("Arial", 10)).pack(anchor="w")
+        
+        # Lado direito
+        ttk.Label(info_right, text=f"Atendente: {receipt_data['cashier']}", font=("Arial", 10)).pack(anchor="w")
+        ttk.Label(info_right, text=f"ID Vendedor: {receipt_data['seller_id']}", font=("Arial", 10)).pack(anchor="w")
+        ttk.Label(info_right, text=f"Pagamento: {receipt_data['payment_method']}", font=("Arial", 10)).pack(anchor="w")
+        
+        # Tabela de itens
+        items_frame = ttk.Frame(parent, relief="solid", borderwidth=1)
+        items_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(items_frame, text="ITENS DA VENDA", font=("Arial", 12, "bold")).pack(pady=5)
+        
+        # Cabeçalho da tabela
+        header_frame = ttk.Frame(items_frame, relief="solid", borderwidth=1)
+        header_frame.pack(fill=tk.X)
+        
+        ttk.Label(header_frame, text="Produto", font=("Arial", 10, "bold"), width=30, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+        ttk.Label(header_frame, text="Qtd", font=("Arial", 10, "bold"), width=8, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+        ttk.Label(header_frame, text="Preço Unit.", font=("Arial", 10, "bold"), width=12, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+        ttk.Label(header_frame, text="Total", font=("Arial", 10, "bold"), width=12, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+        
+        # Itens
+        for item in receipt_data["items"]:
+            item_frame = ttk.Frame(items_frame, relief="solid", borderwidth=1)
+            item_frame.pack(fill=tk.X)
+            
+            ttk.Label(item_frame, text=item["name"], font=("Arial", 9), width=30, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+            ttk.Label(item_frame, text=str(item["quantity"]), font=("Arial", 9), width=8, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+            ttk.Label(item_frame, text=f"R$ {item['unit_price']:.2f}", font=("Arial", 9), width=12, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+            ttk.Label(item_frame, text=f"R$ {item['total_price']:.2f}", font=("Arial", 9), width=12, relief="solid", borderwidth=1).pack(side=tk.LEFT)
+        
+        # Totais
+        totals_frame = ttk.Frame(parent, relief="solid", borderwidth=1)
+        totals_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(totals_frame, text=f"Subtotal: R$ {receipt_data['subtotal']:.2f}", font=("Arial", 11)).pack(anchor="e", padx=10)
+        ttk.Label(totals_frame, text=f"Desconto: R$ {receipt_data['discount']:.2f}", font=("Arial", 11)).pack(anchor="e", padx=10)
+        ttk.Label(totals_frame, text=f"TOTAL: R$ {receipt_data['total']:.2f}", font=("Arial", 14, "bold")).pack(anchor="e", padx=10, pady=5)
+        
+        # Rodapé
+        footer_frame = ttk.Frame(parent)
+        footer_frame.pack(fill=tk.X, pady=10)
+        ttk.Label(footer_frame, text="Obrigado pela preferência!", font=("Arial", 10, "italic")).pack()
+        ttk.Label(footer_frame, text="Esta é uma via da nota fiscal", font=("Arial", 8)).pack()
+    
+    def print_preview(self):
+        """Imprime o preview da nota fiscal"""
+        receipt_data = self.get_current_receipt_data()
+        if not receipt_data:
+            messagebox.showwarning("Aviso", "O carrinho está vazio")
+            return
+        
+        self.print_receipt_data(receipt_data)
+    
+    def save_preview_pdf(self):
+        """Salva o preview da nota fiscal como PDF"""
+        receipt_data = self.get_current_receipt_data()
+        if not receipt_data:
+            messagebox.showwarning("Aviso", "O carrinho está vazio")
+            return
+        
+        self.save_receipt_pdf(receipt_data)
+    
+    def create_pdf(self, receipt_data):
+        """Cria PDF da nota fiscal no padrão convencional"""
+        pdf = FPDF()
+        pdf.add_page()
+        
+        # Cabeçalho da empresa
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, "SISTEMA DE GERENCIAMENTO", 0, 1, "C")
+        
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 6, "CNPJ: 00.000.000/0001-00", 0, 1, "C")
+        pdf.cell(0, 6, "Endereço: Rua Exemplo, 123 - Centro - Cidade/UF", 0, 1, "C")
+        pdf.cell(0, 6, "Telefone: (11) 1234-5678", 0, 1, "C")
+        pdf.ln(5)
+        
+        # Linha separadora
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+        
+        # Título da nota
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, "NOTA FISCAL DE VENDA", 0, 1, "C")
+        pdf.ln(5)
+        
+        # Informações da venda
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 8, f"Número: {receipt_data['sale_id']}", 0, 1)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 6, f"Data/Hora: {receipt_data['date']}", 0, 1)
+        pdf.cell(0, 6, f"Cliente: {receipt_data['customer_name']}", 0, 1)
+        pdf.cell(0, 6, f"CPF/CNPJ: {receipt_data['customer_doc']}", 0, 1)
+        pdf.cell(0, 6, f"Atendente: {receipt_data['cashier']} (ID: {receipt_data['seller_id']})", 0, 1)
+        pdf.cell(0, 6, f"Forma de Pagamento: {receipt_data['payment_method']}", 0, 1)
+        pdf.ln(5)
+        
+        # Linha separadora
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+        
+        # Cabeçalho da tabela de itens
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, "ITENS DA VENDA", 0, 1, "C")
+        pdf.ln(2)
+        
+        pdf.set_font("Arial", "B", 9)
+        pdf.cell(80, 8, "Produto", 1, 0, "C")
+        pdf.cell(25, 8, "Qtd", 1, 0, "C")
+        pdf.cell(35, 8, "Preço Unit.", 1, 0, "C")
+        pdf.cell(35, 8, "Total", 1, 1, "C")
+        
+        # Itens da venda
+        pdf.set_font("Arial", "", 9)
+        for item in receipt_data["items"]:
+            pdf.cell(80, 8, item["name"][:35], 1, 0, "L")  # Limita o nome do produto
+            pdf.cell(25, 8, str(item["quantity"]), 1, 0, "C")
+            pdf.cell(35, 8, f"R$ {item['unit_price']:.2f}", 1, 0, "R")
+            pdf.cell(35, 8, f"R$ {item['total_price']:.2f}", 1, 1, "R")
+        
+        pdf.ln(5)
+        
+        # Totais
+        pdf.set_font("Arial", "", 11)
+        pdf.cell(0, 8, f"Subtotal: R$ {receipt_data['subtotal']:.2f}", 0, 1, "R")
+        pdf.cell(0, 8, f"Desconto: R$ {receipt_data['discount']:.2f}", 0, 1, "R")
+        
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(0, 10, f"TOTAL: R$ {receipt_data['total']:.2f}", 0, 1, "R")
+        
+        pdf.ln(10)
+        
+        # Linha separadora
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
+        
+        # Rodapé
+        pdf.set_font("Arial", "I", 10)
+        pdf.cell(0, 8, "Obrigado pela preferência!", 0, 1, "C")
+        pdf.set_font("Arial", "", 8)
+        pdf.cell(0, 6, "Esta é uma via da nota fiscal", 0, 1, "C")
+        
+        return pdf
+    
+    def print_receipt_data(self, receipt_data):
+        """Imprime a nota fiscal"""
+        try:
+            # Criar PDF temporário
+            pdf = self.create_pdf(receipt_data)
+            temp_filename = f"temp_nota_{receipt_data['sale_id']}.pdf"
+            pdf.output(temp_filename)
+            
+            # Tentar imprimir dependendo do sistema operacional
+            system = platform.system()
+            
+            if system == "Windows":
+                os.startfile(temp_filename, "print")
+            elif system == "Darwin":  # macOS
+                subprocess.run(["lpr", temp_filename])
+            else:  # Linux
+                subprocess.run(["lp", temp_filename])
+            
+            messagebox.showinfo("Impressão", "Documento enviado para impressão!")
+            
+            # Remover arquivo temporário após um tempo
+            self.root.after(5000, lambda: self.remove_temp_file(temp_filename))
+            
+        except Exception as e:
+            messagebox.showerror("Erro de Impressão", f"Não foi possível imprimir a nota fiscal: {str(e)}")
+    
+    def save_receipt_pdf(self, receipt_data):
+        """Salva a nota fiscal como PDF"""
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                initialfile=f"NotaFiscal_{receipt_data['sale_id']}.pdf"
+            )
+            
+            if filename:
+                pdf = self.create_pdf(receipt_data)
+                pdf.output(filename)
+                messagebox.showinfo("Sucesso", f"Nota fiscal salva como: {filename}")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Não foi possível salvar o PDF: {str(e)}")
+    
+    def remove_temp_file(self, filename):
+        """Remove arquivo temporário"""
+        try:
+            if os.path.exists(filename):
+                os.remove(filename)
+        except:
+            pass
+    
     def finalize_sale(self):
         if not self.cart:
             messagebox.showwarning("Aviso", "O carrinho está vazio")
@@ -306,6 +635,7 @@ class BillingSystem:
                     
                     messagebox.showinfo("Sucesso", f"Venda finalizada com sucesso!\nNúmero da nota: {sale_id}")
                     
+                    # Limpar carrinho
                     self.cart = []
                     self.customer_entry.delete(0, tk.END)
                     self.doc_entry.delete(0, tk.END)
@@ -315,8 +645,11 @@ class BillingSystem:
                     self.update_totals()
                     self.load_products()
                     
-                    self.generate_receipt(sale_id)
-                    self.save_as_pdf(sale_id)
+                    # Gerar nota fiscal final
+                    final_receipt_data = self.get_receipt_data_from_sale(sale_id)
+                    if final_receipt_data:
+                        if messagebox.askyesno("Nota Fiscal", "Deseja imprimir a nota fiscal agora?"):
+                            self.print_receipt_data(final_receipt_data)
                 else:
                     conn.rollback()
                     messagebox.showerror("Erro", "Não foi possível registrar a venda")
@@ -328,7 +661,8 @@ class BillingSystem:
             finally:
                 conn.close()
     
-    def generate_receipt(self, sale_id):
+    def get_receipt_data_from_sale(self, sale_id):
+        """Obtém dados da nota fiscal a partir de uma venda finalizada"""
         conn = create_connection()
         if conn is not None:
             sale, items = get_sale_by_id(conn, sale_id)
@@ -358,72 +692,5 @@ class BillingSystem:
                     })
                 
                 return receipt_data
-            else:
-                messagebox.showerror("Erro", "Não foi possível gerar a nota fiscal. Dados da venda não encontrados.")
-                return None
-
-    def create_pdf(self, receipt_data):
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        
-        pdf.cell(0, 10, "NOTA FISCAL", 0, 1, "C")
-        pdf.ln(10)
-        
-        pdf.set_font("Arial", "", 10)
-        pdf.cell(0, 10, f"Número da Venda: {receipt_data['sale_id']}", 0, 1)
-        pdf.cell(0, 10, f"Data: {receipt_data['date']}", 0, 1)
-        pdf.cell(0, 10, f"Cliente: {receipt_data['customer_name']}", 0, 1)
-        pdf.cell(0, 10, f"CPF/CNPJ: {receipt_data['customer_doc']}", 0, 1)
-        pdf.cell(0, 10, f"Atendente: {receipt_data['cashier']} (ID: {receipt_data['seller_id']})")
-        pdf.ln(10)
-        
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "ITENS DA VENDA", 0, 1, "C")
-        pdf.ln(5)
-        
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(80, 10, "Produto", 1, 0, "C")
-        pdf.cell(30, 10, "Qtd", 1, 0, "C")
-        pdf.cell(40, 10, "Preço Unit.", 1, 0, "C")
-        pdf.cell(40, 10, "Total", 1, 1, "C")
-        
-        pdf.set_font("Arial", "", 10)
-        for item in receipt_data["items"]:
-            pdf.cell(80, 10, item["name"], 1, 0, "L")
-            pdf.cell(30, 10, str(item["quantity"]), 1, 0, "C")
-            pdf.cell(40, 10, f"R$ {item['unit_price']:.2f}", 1, 0, "R")
-            pdf.cell(40, 10, f"R$ {item['total_price']:.2f}", 1, 1, "R")
-        
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Subtotal: R$ {receipt_data['subtotal']:.2f}", 0, 1, "R")
-        pdf.cell(0, 10, f"Desconto: R$ {receipt_data['discount']:.2f}", 0, 1, "R")
-        pdf.cell(0, 10, f"TOTAL: R$ {receipt_data['total']:.2f}", 0, 1, "R")
-        pdf.ln(5)
-        pdf.cell(0, 10, f"Forma de Pagamento: {receipt_data['payment_method']}", 0, 1)
-        
-        return pdf
-
-    def print_receipt(self):
-        messagebox.showinfo("Imprimir", "Função de impressão não implementada")
-
-    def save_as_pdf(self, sale_id=None):
-        if sale_id is None:
-            messagebox.showwarning("Aviso", "Nenhuma venda selecionada para salvar")
-            return
-        
-        receipt_data = self.generate_receipt(sale_id)
-        if receipt_data:
-            pdf = self.create_pdf(receipt_data)
-            
-            filename = filedialog.asksaveasfilename(
-                defaultextension=".pdf",
-                filetypes=[("PDF files", "*.pdf")],
-                initialfile=f"NotaFiscal_{receipt_data['sale_id']}.pdf"
-            )
-            
-            if filename:
-                pdf.output(filename)
-                messagebox.showinfo("Sucesso", f"Nota fiscal salva como: {filename}")
+        return None
 
